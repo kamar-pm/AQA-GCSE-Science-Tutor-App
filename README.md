@@ -1,92 +1,84 @@
-# AQA Triple Science Tutor AI
+# 🧬 AQA Triple Science Tutor AI
 
-An advanced, agentic tutoring platform built for AQA Triple Science GCSE students (Biology, Chemistry, Physics). The application uses OpenAI to dynamically generate mock exams tailored to a student's chosen topic, assess their performance according to standard AQA grading rubrics, and provide pedagogical feedback.
-
-## Features
-
-- **Beautiful UI:** A modern, dark-mode glassmorphism interface built cleanly with React and Vite.
-- **Dynamic Content Generation:** Requests mock exams mimicking AQA structure (Multiple Choice, Short Answers, Extended Response) based on topics entered.
-- **AI Examiner Agents:** Employs LLMs to mark student responses strictly according to the generated mark schemes and feedback loops.
-- **Vector DB Ready Platform:** Backend prepared for PDF RAG ingestion using FAISS to inject syllabus text directly.
-
-## Architecture
-
-* **Frontend:** React + Vite + Vanilla CSS (Port `5173`)
-* **Backend:** Python + Flask + OpenAI SDK (Port `8000`)
+An advanced, agentic tutoring platform built specifically for **AQA Triple Science GCSE** students (Biology, Chemistry, Physics). This application goes beyond simple chat; it acts as a professional examiner, grounding its assessments in real textbook content and official AQA past papers through RAG (Retrieval-Augmented Generation).
 
 ---
 
-## Prerequisites
+## 🚀 One-Command Setup
 
-- Node.js (v18+)
-- Python 3.10+
-- A valid OpenAI API Key (`gpt-4o-mini` access)
+The project is fully automated for a seamless developer experience:
 
-## How to Run Locally
+*   **Mac/Linux**: Open terminal and run `./start.sh`
+*   **Windows**: Double-click `start.bat`
 
-You will need to open two terminal instances: one for the backend, and one for the frontend.
-
-### 1. Backend Setup
-
-Open a terminal and navigate to the backend directory:
-```bash
-cd backend
-```
-
-Create and activate a Python virtual environment:
-```bash
-# On Mac/Linux
-python3 -m venv venv
-source venv/bin/activate
-
-# On Windows
-python -m venv venv
-venv\Scripts\activate
-```
-
-Install dependencies:
-```bash
-pip install -r requirements.txt
-pip install python-dotenv Flask flask-cors
-```
-
-Setup Environment keys:
-```bash
-cp .env.example .env
-```
-Open the `.env` file and replace `"your-api-key-here"` with your actual API key from OpenAI.
-
-Start the Flask Backend Server:
-```bash
-python src/main.py
-```
-> The server will start and listen on `http://localhost:8000/`.
+*The scripts will automatically handle Python virtual environments, Node.js dependencies (pip/npm), and clear any existing processes.*
 
 ---
 
-### 2. Frontend Setup
+## ✨ Core Features
 
-Open a second terminal and navigate to the frontend directory:
+### 🕵️ Autonomous Paper Search Agent
+*   **On-Demand Syncing**: Click the **"🔍 Sync Latest AQA Papers"** button to trigger an autonomous search agent.
+*   **Web Discovery**: The agent uses DuckDuckGo to scout for direct PDF links to official AQA Question Papers and Mark Schemes.
+*   **Auto-Download & Ingest**: Found papers are automatically downloaded, validated, and ingested into the tutor's knowledge base.
+
+### 📖 AI-Powered Textbook Ingestion (RAG)
+*   **Automatic OCR**: Uses `rapidocr-onnxruntime` to process scanned and image-based PDFs, ensuring the AI can read real AQA textbooks.
+*   **Vector Search & Metadata**: Tracks ingested files via a local metadata store, ensuring fast, relevant context retrieval without duplication.
+
+### 📝 Dynamic & Accurate Exam Generation
+*   **Context-Aware**: Generates questions directly based on the textbook chapters you select.
+*   **Intelligent Scaling**: Automatically adjusts the exam length (4, 7, 12, or 16 questions) based on the amount of content found.
+*   **Multi-Chapter Support**: Select multiple chapters simultaneously for comprehensive unit-wide mock exams.
+
+### ⏱️ Strict Mode (Timed Exams)
+*   **AQA Standard Timing**: Students can toggle "Strict Mode" to receive **1 minute per mark** (matching real GCSE conditions).
+*   **Auto-Submit**: The exam automatically locks and submits the moment the countdown hits zero.
+
+### 💡 Interactive Pedagogical Hints & References
+*   **Tutor Support**: Toggle the **Get Hint** button for subtle guidance that steer you toward marks without giving away the answer.
+*   **Paper Citations**: Every question identifies its source (e.g., *"Ref: AQA June 2022 Paper 1H"*), so you can cross-reference with official materials.
+
+### 📊 Professional Examiner Feedback
+*   **Detailed Results**: Every question is marked individually with a score, feedback, the actual **Mark Scheme**, and a **Model Answer**.
+
+### 📖 Tutoring & Revision Mode
+*   **Simple Explanations**: Converts complex textbook jargon into easy-to-understand language with relatable analogies.
+*   **Real-World Application**: Provides daily-life examples for every scientific concept.
+*   **Dynamic Cheat Sheets**: Generates structured revision summaries with key terms, formulas, and required practicals for the selected chapters.
+
+---
+
+## 🛠️ Architecture
+
+*   **Frontend**: React + Vite + Vanilla CSS. Featuring a premium **Glassmorphism** dark mode UI. (Port `5173`)
+*   **Backend**: Python + Flask + LangChain + OpenAI. (Port `8000`)
+*   **Intelligence**: `gpt-4o-mini` for fast, cost-effective, and accurate GCSE examining.
+
+---
+
+## 📂 Configuration
+
+### Environment Variables
+Setup your `.env` in the `backend/` directory:
 ```bash
-cd frontend
+OPENAI_API_KEY=your_actual_key_here
 ```
 
-Install Javascript dependencies:
-```bash
-npm install
-```
+### Using Your Own API Key
+If you are deploying this for yourself or want to use your own billing:
+1. Open the app in your browser.
+2. Click the **⚙️ icon** in the top-right of the header.
+3. Enter your **OpenAI API Key** (starts with `sk-...`).
+4. The key is stored safely in your browser's `localStorage` and will be used for all AI generation and grading.
+5. If no key is provided in the settings, the app will fall back to the `OPENAI_API_KEY` defined in the server's `.env` file.
 
-Start the Vite development server:
-```bash
-npm run dev
-```
-> The frontend UI will be accessible at `http://localhost:5173/`. 
+### Adding Your Own Textbooks & Papers
+1.  Navigate to `backend/data/textbooks/`.
+2.  Drop any AQA GCSE Science PDF textbooks or **Past Papers** into this directory.
+3.  **Pro Tip**: The system automatically avoids duplicate ingestion by tracking filenames in `ingested_metadata.json`.
 
-## How To Use
+---
 
-1. Go to `http://localhost:5173` in your browser.
-2. Select a target subject (e.g., Biology).
-3. Type a topic (e.g., "Cell Division").
-4. Click **Generate Mock Assessment**. The Python backend will invoke OpenAI to craft an exam payload.
-5. Answer the questions and click **Submit Exam for Grading**. 
-6. Review your marked score and AI feedback!
+## 📜 Educational Disclaimer
+This tool is designed to be an educational aid. While the AI mimics the AQA marking style, it should be used alongside official AQA past papers and teacher-led study for the best results.

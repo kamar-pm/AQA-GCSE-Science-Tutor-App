@@ -18,13 +18,41 @@ cleanup() {
 # Trap SIGINT (Ctrl+C) and EXIT signals to run the cleanup function
 trap cleanup SIGINT EXIT
 
+# Check and install dependencies
+echo "Checking dependencies..."
+
+# Backend
+cd backend
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv venv || python -m venv venv
+fi
+
+# Activate venv
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+else
+    echo "Error: Could not activate virtual environment."
+    exit 1
+fi
+
+echo "Installing backend dependencies..."
+pip install --upgrade pip
+pip install -r requirements.txt
+cd ..
+
+# Frontend
+cd frontend
+if [ ! -d "node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    npm install
+fi
+cd ..
+
 # Start backend server
 echo "Starting backend..."
 cd backend
-# Activate virtual environment if it exists
-if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-fi
+source venv/bin/activate
 python src/main.py &
 BACKEND_PID=$!
 cd ..

@@ -1,12 +1,12 @@
 import os
+import json
 import argparse
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-# Note: Since the prompt context doesn't have an api key initially, we'll setup dummy embeddings for now or GoogleGenerativeAIEmbeddings.
 # We will use HuggingFace embeddings for local free usage in this implementation.
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 VECTOR_STORE_PATH = os.path.join(os.path.dirname(__file__), "..", "vector_store")
 
@@ -53,31 +53,58 @@ def ingest_pdf(pdf_path: str):
     vectorstore.save_local(VECTOR_STORE_PATH)
     print(f"Successfully ingested {pdf_path} into vector store at {VECTOR_STORE_PATH}")
 
-def ingest_directory(dir_path: str):
+METADATA_PATH = os.path.join(os.path.dirname(__file__), "..", "ingested_metadata.json")
+
+def _load_metadata():
+    if os.path.exists(METADATA_PATH):
+        try:
+            with open(METADATA_PATH, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError):
+            # In case file is empty or has invalid JSON
+            return {"ingested_files": []}
+    return {"ingested_files": []}
+
+def _save_metadata(metadata):
+    with open(METADATA_PATH, 'w') as f:
+        json.dump(metadata, f)
+
+def ingest_directory(dir_path: str, force_reingest: bool = False):
     """
-    Ingests all PDFs in a given directory.
-    To avoid duplicating chunks on every server restart, it skips if the vector store already exists.
+    Ingests all PDFs in a given directory that haven't been ingested yet.
     """
     import glob
+    metadata = _load_metadata()
     
-    if os.path.exists(VECTOR_STORE_PATH):
-        print("Vector store already exists. Skipping startup ingestion to avoid duplicates.")
-        return
-        
-    if not os.path.exists(dir_path):
+    if os.path.exists(dir_path):
         os.makedirs(dir_path, exist_ok=True)
-        print(f"Created directory {dir_path}. Add PDFs here to ingest them on next startup.")
-        return
-        
+    
     pdf_files = glob.glob(os.path.join(dir_path, "*.pdf"))
-    if not pdf_files:
-        print(f"No PDFs found in {dir_path} to ingest.")
+    
+    files_to_ingest = []
+    for pdf in pdf_files:
+        filename = os.path.basename(pdf)
+        if force_reingest or filename not in metadata["ingested_files"]:
+            files_to_ingest.append(pdf)
+    
+    if not files_to_ingest:
+        print(f"Skipping ingestion: All {len(pdf_files)} PDFs in {dir_path} are already up to date in the vector store.")
         return
         
-    for pdf in pdf_files:
+    print(f"Ingesting {len(files_to_ingest)} new files...")
+    for pdf in files_to_ingest:
+        filename = os.path.basename(pdf)
         ingest_pdf(pdf)
+        if filename not in metadata["ingested_files"]:
+            metadata["ingested_files"].append(filename)
+        # Save progress after each file
+        _save_metadata(metadata)
+    
+    print("Ingestion cycle complete.")
 
 if __name__ == "__main__":
+    import json # ensure json is imported for metadata
+    import argparse
     parser = argparse.ArgumentParser(description="Ingest a given PDF textbook into the vector store.")
     parser.add_argument("pdf_path", type=str, help="Absolute or relative path to the PDF.")
     args = parser.parse_args()

@@ -149,7 +149,9 @@ input[type="text"]:focus, textarea:focus, select:focus {
 
 .text-center { text-align: center; }
 .mt-4 { margin-top: 1rem; }
+.mt-8 { margin-top: 2rem; }
 .mb-4 { margin-bottom: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
 .mb-8 { margin-bottom: 2rem; }
 
 /* Status or Loader */
@@ -175,4 +177,103 @@ input[type="text"]:focus, textarea:focus, select:focus {
 
 .fade-in {
   animation: fadeIn 0.5s ease forwards;
+}
+
+/* Toggle Buttons */
+.toggle-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--card-border);
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  transform: none;
+}
+
+.toggle-btn.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.3);
+}
+
+/* Checkbox Multi-Select */
+.checkbox-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.2);
+  padding: 10px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+}
+
+.checkbox-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.checkbox-item.selected {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.checkbox-item input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Timer Banner */
+.timer-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(139, 92, 246, 0.2);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--accent-primary);
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  margin: -24px -24px 24px -24px;
+  border-radius: 16px 16px 0 0;
+  color: white;
+}
+
+.timer-banner.critical {
+  background: rgba(239, 68, 68, 0.4);
+  border-bottom-color: #ef4444;
+  animation: pulse 1s infinite alternate;
+}
+
+@keyframes pulse {
+  from { opacity: 1; }
+  to { opacity: 0.7; }
+}
+
+/* Hint Box */
+.hint-box {
+  background: rgba(139, 92, 246, 0.05);
+  border-left: 3px solid var(--accent-primary);
+  padding: 12px 15px;
+  border-radius: 4px;
+  margin: 15px 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.5;
 }
