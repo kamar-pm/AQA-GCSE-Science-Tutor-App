@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env
+
+# Node.js & Vite
+node_modules/
+dist/
+dist-ssr/
+build/
+.env.local
+.env.*.local
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# App Specific
+backend/vector_store/
+backend/data/textbooks/*.pdf
+*.log
