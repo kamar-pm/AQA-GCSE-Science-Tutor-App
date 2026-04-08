@@ -299,6 +299,46 @@ def tutor_help():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/api/generate_flashcards", methods=["POST"])
+def generate_flashcards():
+    data = request.json
+    subject = data.get("subject", "Science")
+    topic = data.get("topic", "Topic")
+
+    context = get_context_from_topics(topic, k_per_topic=6, max_total_chunks=18)
+
+    system_prompt = f"""
+    You are an expert AQA GCSE Triple Science Tutor for {subject}.
+    Your task is to generate concise, effective FLASHCARDS for the topic: '{topic}'.
+
+    Rules:
+    - Each flashcard must have a QUESTION (front) and ANSWER (back).
+    - Questions should test key definitions, facts, formulas, or processes.
+    - Answers must be short (1-3 sentences max) — optimised for active recall.
+    - Include a mix of: key term definitions, "what/why/how" questions, formula recalls, and common exam points.
+    - Generate exactly 10 flashcards.
+
+    {'Use this textbook context to create relevant, accurate cards:' if context else 'Use general AQA knowledge.'}
+    {context}
+
+    Return ONLY valid JSON:
+    {{
+      "flashcards": [
+        {{ "id": "fc1", "question": "What is...", "answer": "..." }},
+        ...
+      ]
+    }}
+    """
+
+    try:
+        result = call_openai_json(system_prompt, f"Generate 10 flashcards for {topic} now.")
+        return jsonify({
+            "status": "success",
+            "flashcards": result.get("flashcards", [])
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route("/api/tutor_chat", methods=["POST"])
 def tutor_chat():
     data = request.json
