@@ -1,7 +1,9 @@
 import os
 import json
+import time
 import uuid
 import urllib.request
+from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -17,9 +19,12 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from ingestion import ingest_directory, VECTOR_STORE_PATH
 from search_agent import PaperSearchAgent
+from duckduckgo_search.exceptions import RatelimitException
 
 textbooks_dir = os.path.join(os.path.dirname(__file__), "..", "data", "textbooks")
 ingest_directory(textbooks_dir) # Initial startup ingestion
+SYNC_CACHE_PATH = os.path.join(os.path.dirname(__file__), "..", "paper_sync_cache.json")
+SYNC_CACHE_TTL_HOURS = int(os.getenv("PAPER_SYNC_CACHE_TTL_HOURS", "24"))
 
 # Initialize embeddings (cache for re-use)
 embeddings_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -48,6 +53,41 @@ CHAPTERS = {
 
 # In-memory database to store exams and their correct answers
 EXAMS_DB = {}
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+def _load_sync_cache():
+    if not os.path.exists(SYNC_CACHE_PATH):
+        return {}
+    try:
+        with open(SYNC_CACHE_PATH, "r") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, ValueError, OSError):
+        return {}
+
+def _save_sync_cache(cache):
+    try:
+        with open(SYNC_CACHE_PATH, "w") as f:
+            json.dump(cache, f)
+    except OSError as e:
+        print(f"Failed to save sync cache: {e}")
+
+def _is_cache_entry_fresh(entry, ttl_hours):
+    last_synced_at = entry.get("last_synced_at")
+    if not last_synced_at:
+        return False
+    try:
+        last_dt = datetime.strptime(last_synced_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    age_seconds = (datetime.now(timezone.utc) - last_dt).total_seconds()
+    return age_seconds < (ttl_hours * 3600)
 
 def call_openai_json(system_prompt: str, user_prompt: str) -> dict:
     # Prioritize key from header (if user provided it in frontend)
@@ -86,6 +126,39 @@ def call_openai_json(system_prompt: str, user_prompt: str) -> dict:
         print(f"OpenAI API Error: {body}")
         raise ValueError(f"OpenAI API error: {e.code}")
 
+def call_openai_text(system_prompt: str, user_prompt: str) -> str:
+    api_key = request.headers.get("X-OpenAI-API-Key")
+    if not api_key:
+        api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or api_key == "your-api-key-here":
+        raise ValueError("Missing OpenAI API Key. Please provide one in the Settings or ensure the server .env is configured.")
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.7
+    }
+
+    req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            return result["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"OpenAI API Error: {body}")
+        raise ValueError(f"OpenAI API error: {e.code}")
+
 @app.route("/", methods=["GET"])
 def read_root():
     return jsonify({"status": "ok", "message": "AQA Triple Science Tutor API is running."})
@@ -117,6 +190,66 @@ def get_context_from_topics(topics_string: str, k_per_topic: int = 5, max_total_
         print(f"Retrieval error: {e}")
         return ""
 
+def sync_recent_aqa_papers_for_subject(subject: str, years_back: int = 4, force_refresh: bool = False, ttl_hours: int = SYNC_CACHE_TTL_HOURS):
+    """
+    Pull recent AQA papers for a subject, then ingest any new files.
+    Uses a subject-level persistent cache to avoid syncing too frequently.
+    """
+    cache = _load_sync_cache()
+    subject_key = subject.strip().lower()
+    cache_entry = cache.get(subject_key, {})
+    if not force_refresh and _is_cache_entry_fresh(cache_entry, ttl_hours):
+        return {
+            "downloaded_files": [],
+            "used_cache": True,
+            "last_synced_at": cache_entry.get("last_synced_at"),
+            "ttl_hours": ttl_hours,
+            "forced": False
+        }
+
+    agent = PaperSearchAgent(textbooks_dir)
+    current_year = datetime.now().year
+    target_years = [str(current_year - i) for i in range(years_back)]
+
+    downloaded_files = []
+    errors = []
+
+    for year in target_years:
+        try:
+            new_files = agent.search_and_download(subject, year)
+            downloaded_files.extend(new_files)
+            if new_files:
+                time.sleep(0.4)  # spread requests and avoid rapid-fire rate limits
+        except RatelimitException as ratelimit_exc:
+            errors.append(f"{year}: {ratelimit_exc}")
+            print(f"Rate limit while syncing {subject} {year}: {ratelimit_exc}")
+            time.sleep(3)
+            continue
+        except Exception as e:
+            errors.append(f"{year}: {e}")
+
+    if downloaded_files:
+        ingest_directory(textbooks_dir)
+
+    synced_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cache[subject_key] = {
+        "last_synced_at": synced_at,
+        "last_downloaded_count": len(downloaded_files),
+        "last_downloaded_files": downloaded_files[-20:]
+    }
+    _save_sync_cache(cache)
+
+    sync_error = "; ".join(errors) if errors else None
+
+    return {
+        "downloaded_files": downloaded_files,
+        "used_cache": False,
+        "last_synced_at": synced_at,
+        "ttl_hours": ttl_hours,
+        "forced": force_refresh,
+        "sync_error": sync_error
+    }
+
 @app.route("/api/chapters", methods=["GET"])
 def get_chapters():
     subject = request.args.get("subject")
@@ -135,9 +268,41 @@ def generate_exam():
     subject = data.get("subject", "Science")
     topic = data.get("topic", "Topic")
     tier = data.get("tier", "Higher")
-    
-    # 1. Retrieve context from vector store using helper
-    context = get_context_from_topics(topic)
+    force_paper_sync = parse_bool(data.get("force_paper_sync", False))
+
+    # 1) Agent 1: fetch+ingest AQA past papers for this subject
+    downloaded_files = []
+    sync_error = None
+    sync_info = {
+        "downloaded_files": [],
+        "used_cache": False,
+        "last_synced_at": None,
+        "ttl_hours": SYNC_CACHE_TTL_HOURS,
+        "forced": force_paper_sync,
+        "sync_error": None
+    }
+    try:
+        sync_info = sync_recent_aqa_papers_for_subject(subject, force_refresh=force_paper_sync)
+        downloaded_files = sync_info["downloaded_files"]
+        sync_error = sync_info.get("sync_error")
+    except Exception as e:
+        # Keep generation resilient even if sync fails
+        sync_error = str(e)
+        print(f"Paper sync warning for {subject}: {sync_error}")
+
+    # 2) Retrieve context from vector store (prioritize past paper signal + topic signal)
+    paper_context = get_context_from_topics(
+        f"{subject}, {topic}, AQA past paper, mark scheme, question paper",
+        k_per_topic=8,
+        max_total_chunks=24
+    )
+    textbook_context = get_context_from_topics(topic, k_per_topic=5, max_total_chunks=14)
+    context_sections = []
+    if paper_context:
+        context_sections.append(f"PAST PAPER / MARK SCHEME CONTEXT:\n{paper_context}")
+    if textbook_context:
+        context_sections.append(f"TEXTBOOK CONTEXT:\n{textbook_context}")
+    context = "\n\n".join(context_sections)
     
     # 2. Dynamic scaling logic based on context size
     num_questions = 4
@@ -166,12 +331,46 @@ def generate_exam():
         print(f"Scaling error: {e}")
         # Handled by defaults
 
+    # 3) Agent 2a: analysis pass (compare selected topic with retrieved paper patterns)
+    analysis_json = {
+        "high_frequency_patterns": [],
+        "must_cover_subtopics": [],
+        "common_student_errors": [],
+        "reference_papers": []
+    }
+    if context:
+        try:
+            analysis_system_prompt = f"""
+            You are an AQA GCSE examiner analyst for {subject}.
+            Analyse the retrieved context for topic '{topic}' ({tier} tier) and return ONLY JSON.
+
+            Required JSON structure:
+            {{
+              "high_frequency_patterns": ["..."],
+              "must_cover_subtopics": ["..."],
+              "common_student_errors": ["..."],
+              "reference_papers": ["SOURCE filename values only"]
+            }}
+
+            Prioritise anything clearly grounded in AQA question papers/mark schemes.
+            """
+            analysis_json = call_openai_json(
+                analysis_system_prompt,
+                f"Analyse this context and extract exam-design signals:\n{context}"
+            )
+        except Exception as e:
+            print(f"Analysis pass warning: {e}")
+
+    # 4) Agent 2b: generation pass
     system_prompt = f"""
     You are an expert AQA Triple Science GCSE Examiner for {subject}.
     Your task is to generate a mock exam on the topic: '{topic}' for the {tier} tier.
     
-    {"USE THE PROVIDED TEXTBOOK CONTEXT TO CREATE RELEVANT QUESTIONS:" if context else "Note: No specific textbook context was found. Use your general AQA knowledge."}
+    {"USE THE PROVIDED CONTEXT TO CREATE RELEVANT QUESTIONS:" if context else "Note: No specific context was found. Use your general AQA knowledge."}
     {context}
+
+    Use these extracted exam-design signals from a prior analysis pass:
+    {json.dumps(analysis_json)}
     
     You MUST output ONLY valid JSON.
     Generate EXACTLY {num_questions} questions in total.
@@ -249,6 +448,15 @@ def generate_exam():
                 "tier": tier,
                 "time_limit_seconds": time_limit_seconds,
                 "questions": frontend_questions
+            },
+            "source_sync": {
+                "downloaded_count": len(downloaded_files),
+                "downloaded_files": downloaded_files,
+                "used_cache": sync_info.get("used_cache", False),
+                "last_synced_at": sync_info.get("last_synced_at"),
+                "ttl_hours": sync_info.get("ttl_hours", SYNC_CACHE_TTL_HOURS),
+                "forced": sync_info.get("forced", force_paper_sync),
+                "sync_warning": sync_error
             }
         })
     except Exception as e:
@@ -358,6 +566,12 @@ def tutor_chat():
     Maintain a supportive, encouraging tone. 
     Explain complex terms simply and use analogies where helpful.
     
+    Format your final reply with clear sections (Markdown is fine):
+    1. **TL;DR** – single sentence summary.
+    2. **Explain** – short paragraph covering the core concept(s).
+    3. **Analogy / Example** – relatable comparison or real-world application.
+    4. **What Next** – actionable advice, practice idea, or reference to a past paper if available.
+    
     CONTEXT:
     {context if context else "No context found. Use standard AQA syllabus knowledge."}
     
@@ -366,13 +580,10 @@ def tutor_chat():
     """
     
     try:
-        # We use call_openai_json but we want text response. 
-        # Actually, let's just use call_openai_json with a prompt to return {"response": "..."} 
-        # to stay consistent with our current architecture.
-        result = call_openai_json(system_prompt, f"User asked: {message}")
+        response_text = call_openai_text(system_prompt, f"User asked: {message}")
         return jsonify({
             "status": "success",
-            "response": result.get("response", "I'm sorry, I couldn't process that.")
+            "response": response_text
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

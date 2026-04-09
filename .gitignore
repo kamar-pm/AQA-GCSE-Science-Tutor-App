@@ -25,4 +25,5 @@ npm-debug.log*
 # App Specific
 #backend/vector_store/
 backend/data/textbooks/*.pdf
+backend/paper_sync_cache.json
 *.log

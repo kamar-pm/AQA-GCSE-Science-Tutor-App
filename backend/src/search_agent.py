@@ -13,7 +13,15 @@ class PaperSearchAgent:
         """
         Search for AQA past papers and download found PDFs.
         """
-        query = f"AQA GCSE {subject} past papers {year if year else ''} question paper mark scheme pdf"
+        # duckduckgo-search 6.x may include deprecated hard-coded impersonation
+        # names (e.g. chrome_104). Force a stable value to avoid runtime warnings.
+        if hasattr(DDGS, "_impersonates"):
+            DDGS._impersonates = ("random",)
+
+        query = (
+            f"site:aqa.org.uk \"find-past-papers-and-mark-schemes\" "
+            f"AQA GCSE {subject} {year if year else ''} question paper mark scheme pdf"
+        )
         print(f"Agent searching for: {query}")
         
         results = []
@@ -29,8 +37,10 @@ class PaperSearchAgent:
             url = res.get('href')
             title = res.get('title', 'Unknown Paper')
             
-            # Simple validation: Must be a PDF and from a trusted-looking domain
+            # Simple validation: Must be a PDF and from AQA-controlled domains
             if url and (url.endswith('.pdf') or 'pdf' in url.lower()):
+                if not self._is_trusted_aqa_url(url):
+                    continue
                 # Avoid known spam domains if any (AQA, RevisionScience, SaveMyExams are good)
                 try:
                     filename = self._generate_filename(subject, title, url)
@@ -51,6 +61,13 @@ class PaperSearchAgent:
                     print(f"Failed to download {url}: {e}")
 
         return downloaded_files
+
+    def _is_trusted_aqa_url(self, url):
+        lowered = url.lower()
+        return (
+            "aqa.org.uk" in lowered
+            or "filestore.aqa.org.uk" in lowered
+        )
 
     def _generate_filename(self, subject, title, url):
         # Create a clean filename from title and URL
