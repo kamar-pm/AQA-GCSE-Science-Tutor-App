@@ -386,7 +386,7 @@ def sync_papers():
         agent = PaperSearchAgent(textbooks_dir)
         # Search for recent years
         all_new_files = []
-        for year in ["2022", "2023"]:
+        for year in ["2022", "2023", "2024", "2025"]:
             new_files = agent.search_and_download(subj, year)
             all_new_files.extend(new_files)
         
