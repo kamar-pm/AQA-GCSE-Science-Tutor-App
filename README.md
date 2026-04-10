@@ -6,12 +6,22 @@ An advanced, agentic tutoring platform built specifically for **AQA Triple Scien
 
 ## 🚀 One-Command Setup
 
+### Prerequisites
+Before running the project, ensure you have the following installed on your system:
+*   **Python** (3.10 or higher)
+*   **Node.js** (includes `npm`)
+
+### Running the App
 The project is fully automated for a seamless developer experience:
 
 *   **Mac/Linux**: Open terminal and run `./start.sh`
 *   **Windows**: Double-click `start.bat`
 
 *The scripts will automatically handle Python virtual environments, Node.js dependencies (pip/npm), and clear any existing processes.*
+
+### Troubleshooting
+- **Dependency Build Errors (e.g., numpy):** The `backend/requirements.txt` file has been updated to use unpinned dependencies. This allows pip to automatically install the newest compatible library versions (such as `numpy` >= 2.0.0 and modern `langchain` equivalents). This natively resolves `metadata-generation-failed` compilation errors on newer Python versions (3.12-3.14) without requiring Visual Studio C++ Compiler tools.
+- **LangChain Imports:** Fixed `ModuleNotFoundError` by updating legacy LangChain text splitter imports to utilize the dedicated `langchain_text_splitters` package, ensuring full forward-compatibility with LangChain v1.x+.
 
 ---
 
