@@ -1,4 +1,4 @@
-import os
+import os # force reload 2
 import json
 import time
 import uuid
@@ -19,7 +19,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from ingestion import ingest_directory, VECTOR_STORE_PATH
 from search_agent import PaperSearchAgent
-from duckduckgo_search.exceptions import RatelimitException
+from ddgs.exceptions import RatelimitException
 
 textbooks_dir = os.path.join(os.path.dirname(__file__), "..", "data", "textbooks")
 ingest_directory(textbooks_dir) # Initial startup ingestion
@@ -381,7 +381,7 @@ def generate_exam():
     
     For every question, you MUST provide:
     1. A "hint" (subtle pedagogical guidance toward key marking points).
-    2. A "reference" (Identify if the question is inspired by a specific AQA past paper in the context. If so, cite the paper name from the SOURCE metadata. If it's general textbook content, use "AQA Syllabus Standard").
+    2. A "reference" (Identify if the question is inspired by a specific AQA past paper in the context. If so, provide the FULL exact paper reference from the SOURCE metadata including the specific question reference if available. Do not abbreviate the paper name. If it's general textbook content, use "AQA Syllabus Standard").
 
     The JSON structure should be:
     {{
@@ -393,7 +393,7 @@ def generate_exam():
           "options": ["A", "B", "C", "D"],
           "marks": 1,
           "hint": "Subtle hint here",
-          "reference": "AQA June 2022 Paper 1H / Standard",
+          "reference": "FULL_EXACT_SOURCE_FILENAME_OR_REFERENCE_STRING",
           "correct_answer": "the exact string of the correct option"
         }},
         {{

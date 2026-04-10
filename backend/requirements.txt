@@ -12,5 +12,8 @@ pypdf
 rapidocr-onnxruntime
 numpy
 langchain-huggingface
-duckduckgo-search
+ddgs
 requests
+cryptography
+pymupdf
+pdfplumber

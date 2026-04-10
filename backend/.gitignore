@@ -1,0 +1,6 @@
+venv/
+vector_store/
+data/textbooks/
+ingested_metadata.json
+paper_sync_cache.json
+__pycache__/

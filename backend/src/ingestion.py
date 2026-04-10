@@ -7,8 +7,45 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 # We will use HuggingFace embeddings for local free usage in this implementation.
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+import numpy as np
+import fitz
+from rapidocr_onnxruntime import RapidOCR
 
 VECTOR_STORE_PATH = os.path.join(os.path.dirname(__file__), "..", "vector_store")
+
+def manual_ocr_load(pdf_path: str):
+    """
+    Perform manual OCR on a PDF by rendering pages as images and using RapidOCR.
+    """
+    print(f"Starting heavy OCR process for {pdf_path}...")
+    doc = fitz.open(pdf_path)
+    engine = RapidOCR()
+    documents = []
+    
+    total_pages = len(doc)
+    for i in range(total_pages):
+        page = doc.load_page(i)
+        # Higher DPI for better OCR accuracy
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        
+        # Run OCR
+        result, _ = engine(img)
+        page_text = ""
+        if result:
+            page_text = "\n".join([line[1] for line in result])
+        
+        if page_text.strip():
+            documents.append(Document(
+                page_content=page_text,
+                metadata={"source": pdf_path, "page": i + 1}
+            ))
+            
+        if (i + 1) % 5 == 0 or i == total_pages - 1:
+            print(f"OCRing {os.path.basename(pdf_path)}: Page {i + 1}/{total_pages} processed...")
+            
+    return documents
 
 def ingest_pdf(pdf_path: str):
     """
@@ -18,11 +55,10 @@ def ingest_pdf(pdf_path: str):
         print(f"Error: PDF not found at {pdf_path}")
         return
 
-    print(f"Loading PDF from {pdf_path} (Running OCR with rapidocr - this may take several minutes per book)...")
+    print(f"Loading PDF from {pdf_path} (Using PyPDFLoader parser with OCR enabled)...")
     loader = PyPDFLoader(pdf_path, extract_images=True)
     documents = loader.load()
 
-    print(f"Loaded {len(documents)} pages. Splitting into chunks...")
     # Use standard chunking parameters
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
@@ -30,11 +66,25 @@ def ingest_pdf(pdf_path: str):
         length_function=len
     )
     chunks = text_splitter.split_documents(documents)
-    print(f"Split into {len(chunks)} chunks.")
     
+    # Fallback to PyMuPDFLoader if PyPDFLoader yields nothing
     if not chunks:
-        print(f"Warning: No text chunks could be extracted from {pdf_path}. This usually happens if the PDF is image-based (scanned) or contains no selectable text.")
-        return
+        print(f"PyPDFLoader yielded 0 chunks for {pdf_path}. Falling back to PyMuPDFLoader...")
+        from langchain_community.document_loaders import PyMuPDFLoader
+        loader = PyMuPDFLoader(pdf_path)
+        documents = loader.load()
+        chunks = text_splitter.split_documents(documents)
+
+    # FINAL FALLBACK: Manual OCR (Heavy Duty)
+    if not chunks:
+        print(f"Standard extraction failed (0 chunks) for {pdf_path}. Triggering manual fallback OCR...")
+        documents = manual_ocr_load(pdf_path)
+        chunks = text_splitter.split_documents(documents)
+
+    if not chunks:
+        raise ValueError(f"CRITICAL FAILURE: No text chunks could be extracted from {pdf_path} using ANY loader (including manual OCR). The file may be corrupt or encrypted.")
+
+    print(f"Loaded and split into {len(chunks)} chunks.")
 
     print("Initializing embedding model...")
     # Using a robust and small sentence-transformers model
@@ -94,11 +144,16 @@ def ingest_directory(dir_path: str, force_reingest: bool = False):
     print(f"Ingesting {len(files_to_ingest)} new files...")
     for pdf in files_to_ingest:
         filename = os.path.basename(pdf)
-        ingest_pdf(pdf)
-        if filename not in metadata["ingested_files"]:
-            metadata["ingested_files"].append(filename)
-        # Save progress after each file
-        _save_metadata(metadata)
+        try:
+            ingest_pdf(pdf)
+            if filename not in metadata["ingested_files"]:
+                metadata["ingested_files"].append(filename)
+            # Save progress after each successful file
+            _save_metadata(metadata)
+        except Exception as e:
+            print(f"Error during ingestion of {filename}: {str(e)}")
+            print("Aborting the rest of the ingestion queue immediately as requested.")
+            break
     
     print("Ingestion cycle complete.")
 

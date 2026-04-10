@@ -1,7 +1,7 @@
 import os
 import requests
 import re
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from pathlib import Path
 
 class PaperSearchAgent:
@@ -20,7 +20,8 @@ class PaperSearchAgent:
 
         query = (
             f"site:aqa.org.uk \"find-past-papers-and-mark-schemes\" "
-            f"AQA GCSE {subject} {year if year else ''} question paper mark scheme pdf"
+            f"AQA GCSE {subject} {year if year else ''} \"higher\" question paper mark scheme pdf "
+            f"-combined -trilogy -synergy -\"a-level\" -\"as-level\" -foundation"
         )
         print(f"Agent searching for: {query}")
         
@@ -41,6 +42,14 @@ class PaperSearchAgent:
             if url and (url.endswith('.pdf') or 'pdf' in url.lower()):
                 if not self._is_trusted_aqa_url(url):
                     continue
+                
+                # Block A-level, combined, and trilogy variants
+                lowered_check = (title + " " + url).lower()
+                bad_keywords = ["combined", "trilogy", "synergy", "a-level", "as-level", "a level", "as level", "foundation"]
+                if any(bad in lowered_check for bad in bad_keywords):
+                    print(f"Skipping {title} (Filtered out non-GCSE Triple Science)")
+                    continue
+
                 # Avoid known spam domains if any (AQA, RevisionScience, SaveMyExams are good)
                 try:
                     filename = self._generate_filename(subject, title, url)
