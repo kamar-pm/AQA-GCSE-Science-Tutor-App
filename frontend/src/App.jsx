@@ -4,6 +4,7 @@ import SessionConfig from './components/SessionConfig';
 import ExamView from './components/ExamView';
 import TutorView from './components/TutorView';
 import ResultsView from './components/ResultsView';
+import LoadingScreen from './components/LoadingScreen';
 
 const API_URL = "http://localhost:8000/api";
 
@@ -306,12 +307,7 @@ function App() {
         )}
 
         {loading && (
-          <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
-            <div className="premium-loader" style={{ marginBottom: '24px' }} />
-            <p style={{ color: 'hsl(var(--text-dim))' }}>
-              Orchestrating AI materials for {subject?.name}...
-            </p>
-          </div>
+          <LoadingScreen subject={subject} />
         )}
 
         {subject && tutorData && !loading && (
