@@ -17,3 +17,5 @@ requests
 cryptography
 pymupdf
 pdfplumber
+langgraph
+langchain-openai

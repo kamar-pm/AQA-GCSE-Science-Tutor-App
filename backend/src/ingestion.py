@@ -12,7 +12,12 @@ import numpy as np
 import fitz
 from rapidocr_onnxruntime import RapidOCR
 
-VECTOR_STORE_PATH = os.path.join(os.path.dirname(__file__), "..", "vector_store")
+from retrieval import VECTOR_STORE_PATH
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# Global text splitter for consistent ingestion
+# Increased chunk_size to 2000 to capture entire AQA long-form questions in one block
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
 
 def manual_ocr_load(pdf_path: str):
     """

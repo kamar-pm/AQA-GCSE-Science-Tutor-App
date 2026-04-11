@@ -58,11 +58,12 @@ The project is fully automated for a seamless developer experience:
 ### 📊 Professional Examiner Feedback
 *   **Detailed Results**: Every question is marked individually with a score, feedback, the actual **Mark Scheme**, and a **Model Answer**.
 
-### 📖 Tutoring & Revision Mode
-*   **Metadata-Isolated Retrieval**: Uses a strict database filter to ensure revision knowledge comes from textbooks while citations come exclusively from actual papers.
-*   **Simple Explanations**: Converts complex textbook jargon into easy-to-understand language with relatable analogies.
-*   **Real-World Application**: Provides daily-life examples for every scientific concept.
-*   **Dynamic Cheat Sheets**: Generates structured revision summaries with key terms, formulas, and required practicals for the selected chapters.
+### 📖 Tutoring & Revision Mode (Agentic)
+*   **AI-Generated Infographics**: Generates custom **SVG diagrams** for every topic (circuits, cells, molecules) for immediate visual learning.
+*   **Exhaustive Pedagogical Depth**: Over 1,000 words of masterclass-level detail covering every sub-lesson in the chapter.
+*   **LangGraph-Powered Orchestration**: Uses a multi-agent graph to plan search strategies and self-critique pedagogical responses.
+*   **Conversational Session Memory**: Maintains context across multiple turns, allowing for deep follow-up questions.
+*   **Metadata-Isolated Retrieval**: Guarantees a separation between textbook theory and official AQA exam references.
 
 ---
 
@@ -70,7 +71,8 @@ The project is fully automated for a seamless developer experience:
 
 *   **Frontend**: React + Vite + Vanilla CSS. Featuring a premium **Glassmorphism** dark mode UI. (Port `5173`)
 *   **Backend**: Python + Flask + LangChain + OpenAI. (Port `8000`)
-*   **Intelligence**: `gpt-4o-mini` for fast, cost-effective, and accurate GCSE examining.
+*   **Intelligence**: **GPT-4o** for professional-grade tutoring and exam analysis.
+
 
 ---
 

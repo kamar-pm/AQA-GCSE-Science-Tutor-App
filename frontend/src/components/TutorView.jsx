@@ -322,6 +322,23 @@ const TutorView = ({
                     <p style={{ fontSize: '0.88rem', lineHeight: 1.5, color: 'hsl(var(--text-dim))', margin: 0 }}>
                       {paper.summary}
                     </p>
+                    
+                    {paper.question_text && (
+                      <div style={{ 
+                        marginTop: '8px', 
+                        padding: '12px', 
+                        background: 'rgba(0,0,0,0.2)', 
+                        borderRadius: '6px',
+                        borderLeft: `2px solid ${accentColor}`,
+                        fontSize: '0.82rem',
+                        fontFamily: 'monospace',
+                        color: 'hsl(var(--text-muted))',
+                        whiteSpace: 'pre-wrap'
+                      }}>
+                        <div style={{ color: accentColor, fontSize: '0.65rem', textTransform: 'uppercase', marginBottom: '6px', fontWeight: 700 }}>Actual Question Excerpt</div>
+                        {paper.question_text}
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
