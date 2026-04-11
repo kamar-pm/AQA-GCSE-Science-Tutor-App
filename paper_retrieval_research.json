@@ -1,0 +1,62 @@
+{
+  "Atomic structure": {
+    "strategy_current": [
+      "AQA_Physics_JUN2384631H01_IBMJun23E6_84631H_For_Examiners_Use_Question_Mark_1_2_3_4.pdf",
+      "AQA_Physics_Question_paper_Higher__Paper_1_-_June_2023_-_AQA.pdf",
+      "AQA_Chemistry_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Chemistry_MarkschemeHigher__Paper_1_-_June2023.pdf",
+      "AQA_Chemistry_MarkschemeHigher__Paper_1_-_June_2023.pdf",
+      "AQA_Chemistry_Mark_scheme_Higher_Paper1_-_June2023.pdf",
+      "AQA_Chemistry_Mark_scheme_Higher_Paper1_-_June_2023.pdf"
+    ],
+    "strategy_topic_only": [
+      "AQA_Physics_JUN2384631H01_IBMJun23E6_84631H_For_Examiners_Use_Question_Mark_1_2_3_4.pdf",
+      "AQA_Physics_Question_paper_Higher__Paper_1_-_June_2023_-_AQA.pdf",
+      "AQA_Chemistry_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf"
+    ],
+    "strategy_subject_topic": [
+      "AQA_Chemistry_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf"
+    ]
+  },
+  "Electrolysis": {
+    "strategy_current": [
+      "AQA_Chemistry_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Physics_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Physics_PDFMark_scheme_Higher_Paper_1_-_June_2024_-_MME_Revise.pdf",
+      "AQA_Chemistry_MarkschemeHigher__Paper_1_-_June2023.pdf",
+      "AQA_Chemistry_MarkschemeHigher__Paper_1_-_June_2023.pdf",
+      "AQA_Chemistry_Mark_scheme_Higher_Paper1_-_June2023.pdf",
+      "AQA_Chemistry_Mark_scheme_Higher_Paper1_-_June_2023.pdf"
+    ],
+    "strategy_topic_only": [
+      "AQA_Chemistry_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf"
+    ],
+    "strategy_subject_topic": [
+      "AQA_Chemistry_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf"
+    ]
+  },
+  "Cell biology": {
+    "strategy_current": [
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Biology_PDFMark_scheme_Higher__Paper_2_-_June_2022_-_AQA.pdf",
+      "AQA_Biology_PDFQuestion_paper_Higher__Paper_2_-_June_2022_-_AQA.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Biology_PDFQuestion_paper_Higher__Paper_2_-_June_2022_-_AQA.pdf",
+      "AQA_Biology_PDFQuestion_paper_Higher__Paper_2_-_June_2023_-_AQA.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper1_-_June_2019.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Biology_PDFQuestion_paper_Higher__Paper_2_-_June_2022_-_AQA.pdf",
+      "AQA_Biology_MarkschemeHigher__Paper_2_-_June_2023.pdf"
+    ],
+    "strategy_topic_only": [
+      "AQA_Biology_Mark_scheme_Higher_Paper1_-_June_2019.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf"
+    ],
+    "strategy_subject_topic": [
+      "AQA_Biology_Mark_scheme_Higher_Paper1_-_June_2019.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf",
+      "AQA_Biology_Mark_scheme_Higher_Paper_1_-_June_2024_-_AQA.pdf"
+    ]
+  }
+}
