@@ -314,6 +314,7 @@ function App() {
           <TutorView
             subject={subject}
             tutorData={tutorData}
+            topic={selectedTopics.length > 0 ? selectedTopics.join(", ") : topicInput}
             selectedTopics={selectedTopics.length > 0 ? selectedTopics : [topicInput]}
             chatHistory={chatHistory}
             chatInput={chatInput}

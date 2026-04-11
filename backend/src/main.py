@@ -20,16 +20,25 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from ingestion import ingest_directory, VECTOR_STORE_PATH
 from search_agent import PaperSearchAgent
 from ddgs.exceptions import RatelimitException
+from chapter_extractor import run_extraction_cycle
 
 textbooks_dir = os.path.join(os.path.dirname(__file__), "..", "data", "textbooks")
-ingest_directory(textbooks_dir) # Initial startup ingestion
 SYNC_CACHE_PATH = os.path.join(os.path.dirname(__file__), "..", "paper_sync_cache.json")
 SYNC_CACHE_TTL_HOURS = int(os.getenv("PAPER_SYNC_CACHE_TTL_HOURS", "24"))
+
+# Initial startup ingestion
+ingest_directory(textbooks_dir) 
 
 # Initialize embeddings (cache for re-use)
 embeddings_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# Standard AQA GCSE Chapters (Refined from Textbooks)
+# Ensure metadata is tagged on startup
+from ingestion import update_existing_metadata
+update_existing_metadata(VECTOR_STORE_PATH, embeddings_model)
+
+EXTRACTED_CHAPTERS_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "extracted_chapters.json")
+
+# Standard AQA GCSE Chapters (Fallback if dynamic extraction fails)
 CHAPTERS = {
     "Biology": [
         "Chapter B1 Cell biology", "Chapter B2 Organisation", "Chapter B3 Infection and response", 
@@ -50,6 +59,29 @@ CHAPTERS = {
         "Chapter P14 Light", "Chapter P15 Electromagnetism", "Chapter P16 Space"
     ]
 }
+
+def load_dynamic_chapters():
+    global CHAPTERS
+    if os.path.exists(EXTRACTED_CHAPTERS_PATH):
+        try:
+            with open(EXTRACTED_CHAPTERS_PATH, "r") as f:
+                new_chapters = json.load(f)
+                if new_chapters:
+                    CHAPTERS.update(new_chapters)
+                    print(f"Loaded {sum(len(v) for v in new_chapters.values())} chapters from cache.")
+        except Exception as e:
+            print(f"Failed to load extracted chapters: {e}")
+    else:
+        # Try to extract if API key is in env
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key and api_key != "your-api-key-here":
+            print("extracted_chapters.json missing. Running automatic extraction...")
+            extracted = run_extraction_cycle(textbooks_dir, api_key, EXTRACTED_CHAPTERS_PATH)
+            if extracted:
+                CHAPTERS.update(extracted)
+
+# Load chapters on startup
+load_dynamic_chapters()
 
 # In-memory database to store exams and their correct answers
 EXAMS_DB = {}
@@ -164,7 +196,7 @@ def read_root():
     return jsonify({"status": "ok", "message": "AQA Triple Science Tutor API is running."})
 
 # Helper for RAG retrieval
-def get_context_from_topics(topics_string: str, k_per_topic: int = 5, max_total_chunks: int = 18):
+def get_context_from_topics(topics_string: str, k_per_topic: int = 5, max_total_chunks: int = 18, doc_type: str = None):
     if not os.path.exists(VECTOR_STORE_PATH):
         return ""
     
@@ -174,9 +206,12 @@ def get_context_from_topics(topics_string: str, k_per_topic: int = 5, max_total_
         all_docs = []
         seen_content = set()
         
+        # Build filter if provided
+        search_filter = {"doc_type": doc_type} if doc_type else None
+        
         for t in topic_items:
-            # Search for relevant chunks per topic
-            docs = vectorstore.similarity_search(t, k=k_per_topic)
+            # Search for relevant chunks per topic with metadata filter
+            docs = vectorstore.similarity_search(t, k=k_per_topic, filter=search_filter)
             for d in docs:
                 if d.page_content not in seen_content:
                     all_docs.append(d)
@@ -190,7 +225,7 @@ def get_context_from_topics(topics_string: str, k_per_topic: int = 5, max_total_
         print(f"Retrieval error: {e}")
         return ""
 
-def sync_recent_aqa_papers_for_subject(subject: str, years_back: int = 4, force_refresh: bool = False, ttl_hours: int = SYNC_CACHE_TTL_HOURS):
+def sync_recent_aqa_papers_for_subject(subject: str, years_back: int = 5, force_refresh: bool = False, ttl_hours: int = SYNC_CACHE_TTL_HOURS):
     """
     Pull recent AQA papers for a subject, then ingest any new files.
     Uses a subject-level persistent cache to avoid syncing too frequently.
@@ -469,8 +504,14 @@ def tutor_help():
     topic = data.get("topic", "Topic")
     user_api_key = request.headers.get("X-OpenAI-API-Key")
     
-    # 1. Retrieve context using helper (use more chunks for better explanation)
-    context = get_context_from_topics(topic, k_per_topic=8, max_total_chunks=25)
+    # 1. Retrieve context using helper (Broad search for explanation - focus on Textbooks)
+    explanation_context = get_context_from_topics(topic, k_per_topic=8, max_total_chunks=15, doc_type="textbook")
+    
+    # 2. Narrow search for past paper references (MANDATORY filter for Papers only)
+    paper_query = f"{topic} AQA exam question"
+    paper_context = get_context_from_topics(paper_query, k_per_topic=12, max_total_chunks=20, doc_type="paper")
+    
+    combined_context = f"TEXTBOOK KNOWLEDGE:\n{explanation_context}\n\nACTUAL PAST PAPER EXCERPTS:\n{paper_context}"
     
     system_prompt = f"""
     You are an expert AQA GCSE Triple Science Tutor for {subject}.
@@ -489,11 +530,25 @@ def tutor_help():
     {{
        "explanation": "Markdown formatted explanation",
        "examples": "Markdown formatted real-world examples",
-       "cheat_sheet": "Markdown formatted revision summary"
+       "cheat_sheet": "Markdown formatted revision summary",
+       "past_papers": [
+         {{
+           "title": "Clean concise title (e.g. Physics Paper 1H June 2022)",
+           "year": "YYYY",
+           "tier": "Higher/Foundation/Standard",
+           "summary": "Brief 1-sentence description of the question content found in this paper for the topic."
+         }}
+       ]
     }}
     
+    In the "past_papers" array:
+    - Only include items that are clearly QUESTION PAPERS. 
+    - EXCLUDE anything with 'Mark_scheme', 'Mark Scheme', 'MS', or 'Student Book' in the filename.
+    - Focus on finding files that represent actual AQA exams.
+    - If no specific papers are identified in the context, return an empty array.
+    
     CONTEXT:
-    {context if context else "No context found. Use standard AQA syllabus knowledge."}
+    {combined_context if explanation_context or paper_context else "No context found. Use standard AQA syllabus knowledge."}
     """
     
     try:
@@ -595,9 +650,12 @@ def sync_papers():
     
     try:
         agent = PaperSearchAgent(textbooks_dir)
-        # Search for recent years
+        # Search for recent years (dynamic last 5 years)
+        current_year = datetime.now().year
+        target_years = [str(current_year - i) for i in range(5)]
+        
         all_new_files = []
-        for year in ["2022", "2023", "2024", "2025"]:
+        for year in target_years:
             new_files = agent.search_and_download(subj, year)
             all_new_files.extend(new_files)
         

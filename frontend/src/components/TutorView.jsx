@@ -170,6 +170,7 @@ const InfoCard = ({ icon, label, value, color }) => (
 const TutorView = ({
   subject,
   tutorData,
+  topic,
   selectedTopics = [],
   chatHistory,
   chatInput, setChatInput,
@@ -191,12 +192,14 @@ const TutorView = ({
     { id: 'explain', label: '💡 Explanation' },
     { id: 'examples', label: '🌍 Examples' },
     { id: 'cheatsheet', label: '📋 Cheat Sheet' },
+    { id: 'papers', label: '📜 Exam Papers' },
   ];
 
   const tabContent = {
     explain: tutorData?.explanation,
     examples: tutorData?.examples,
     cheatsheet: tutorData?.cheat_sheet,
+    papers: tutorData?.past_papers,
   };
 
   const tabStyle = (active) => ({
@@ -273,10 +276,66 @@ const TutorView = ({
 
         {/* Tab Content */}
         <div key={activeTab} className="premium-card fade-in" style={{ padding: '28px', minHeight: '300px' }}>
-          {tabContent[activeTab]
-            ? <SafeMarkdown>{tabContent[activeTab]}</SafeMarkdown>
-            : <p style={{ color: 'hsl(var(--text-muted))', fontStyle: 'italic' }}>Loading...</p>
-          }
+          {activeTab === 'papers' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ marginBottom: '8px' }}>
+                <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '4px' }}>AQA Past Paper References</h4>
+                <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-muted))' }}>
+                  The following question papers contain questions directly related to <strong>{topic}</strong>.
+                </p>
+              </div>
+              
+              {tabContent.papers && tabContent.papers.length > 0 ? (
+                tabContent.papers.map((paper, idx) => (
+                  <div key={idx} className="premium-card" style={{ 
+                    padding: '20px', 
+                    background: 'rgba(255,255,255,0.02)', 
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={{ padding: '8px', background: `${accentColor}20`, borderRadius: '8px', color: accentColor }}>
+                          📄
+                        </div>
+                        <div>
+                          <h5 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{paper.title}</h5>
+                          <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', marginTop: '2px' }}>AQA GCSE {subject.name} • {paper.year}</p>
+                        </div>
+                      </div>
+                      <span style={{ 
+                        fontSize: '0.65rem', 
+                        textTransform: 'uppercase', 
+                        letterSpacing: '0.05em', 
+                        padding: '4px 10px', 
+                        borderRadius: '6px', 
+                        background: paper.tier?.toLowerCase().includes('higher') ? 'rgba(255,100,100,0.15)' : 'rgba(100,255,100,0.1)',
+                        color: paper.tier?.toLowerCase().includes('higher') ? '#ff6b6b' : '#51cf66',
+                        border: `1px solid ${paper.tier?.toLowerCase().includes('higher') ? '#ff6b6b33' : '#51cf6633'}`,
+                        fontWeight: 700
+                      }}>
+                        {paper.tier}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.88rem', lineHeight: 1.5, color: 'hsl(var(--text-dim))', margin: 0 }}>
+                      {paper.summary}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div style={{ padding: '48px 0', textAlign: 'center', opacity: 0.5 }}>
+                  <p style={{ fontSize: '0.9rem' }}>No specific past paper references found for this topic yet.</p>
+                  <p style={{ fontSize: '0.75rem', marginTop: '4px' }}>Try syncing more papers to expand the library.</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            tabContent[activeTab]
+              ? <SafeMarkdown>{tabContent[activeTab]}</SafeMarkdown>
+              : <p style={{ color: 'hsl(var(--text-muted))', fontStyle: 'italic' }}>Loading...</p>
+          )}
         </div>
 
         {/* External Resources */}

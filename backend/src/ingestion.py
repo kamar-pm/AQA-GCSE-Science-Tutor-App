@@ -36,10 +36,11 @@ def manual_ocr_load(pdf_path: str):
         if result:
             page_text = "\n".join([line[1] for line in result])
         
-        if page_text.strip():
+            # Tag document type based on filename
+            doc_type = "textbook" if "Student Book" in pdf_path else "paper"
             documents.append(Document(
                 page_content=page_text,
-                metadata={"source": pdf_path, "page": i + 1}
+                metadata={"source": pdf_path, "page": i + 1, "doc_type": doc_type}
             ))
             
         if (i + 1) % 5 == 0 or i == total_pages - 1:
@@ -60,12 +61,12 @@ def ingest_pdf(pdf_path: str):
     documents = loader.load()
 
     # Use standard chunking parameters
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )
     chunks = text_splitter.split_documents(documents)
+    
+    # Ensure chunks inherit the correct doc_type
+    doc_type = "textbook" if "Student Book" in pdf_path else "paper"
+    for chunk in chunks:
+        chunk.metadata["doc_type"] = doc_type
     
     # Fallback to PyMuPDFLoader if PyPDFLoader yields nothing
     if not chunks:
@@ -101,7 +102,31 @@ def ingest_pdf(pdf_path: str):
 
     # Save to disk
     vectorstore.save_local(VECTOR_STORE_PATH)
-    print(f"Successfully ingested {pdf_path} into vector store at {VECTOR_STORE_PATH}")
+    print(f"Successfully ingested {pdf_path} (Type: {doc_type}) into vector store at {VECTOR_STORE_PATH}")
+
+def update_existing_metadata(vector_store_path, embeddings):
+    """
+    Utility to update doc_type metadata for existing chunks in FAISS index.
+    """
+    if not os.path.exists(vector_store_path):
+        return
+    
+    print("Updating metadata for existing vector store chunks...")
+    vectorstore = FAISS.load_local(vector_store_path, embeddings, allow_dangerous_deserialization=True)
+    updated = False
+    
+    # Access the underlying docstore
+    for doc_id, doc in vectorstore.docstore._dict.items():
+        if "doc_type" not in doc.metadata:
+            source = doc.metadata.get("source", "")
+            doc.metadata["doc_type"] = "textbook" if "Student Book" in source else "paper"
+            updated = True
+            
+    if updated:
+        vectorstore.save_local(vector_store_path)
+        print("Successfully updated metadata for all existing chunks.")
+    else:
+        print("Metadata already up to date.")
 
 METADATA_PATH = os.path.join(os.path.dirname(__file__), "..", "ingested_metadata.json")
 

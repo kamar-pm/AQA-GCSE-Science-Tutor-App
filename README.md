@@ -28,15 +28,16 @@ The project is fully automated for a seamless developer experience:
 ## ✨ Core Features
 
 ### 🕵️ Autonomous Paper Search Agent
-*   **Automatic During Exam Generation**: `POST /api/generate_exam` now triggers paper syncing for the selected subject before question generation.
-*   **On-Demand Syncing Still Available**: You can still use the explicit sync flow (`/api/sync_papers`) when needed.
-*   **AQA-Focused Discovery**: The search flow targets AQA past paper/mark scheme pages and only downloads from trusted AQA domains (`aqa.org.uk`, `filestore.aqa.org.uk`).
-*   **Auto-Download & Ingest**: New PDFs are downloaded and ingested into the vector store for RAG context.
-*   **Cached Sync**: Subject-level sync is cached (default 24h TTL) to avoid repeated web lookups on every exam request.
+*   **Extreme 2024 Discovery**: Now includes support for the latest 2024 papers using AQA's official subject codes (**8461**, **8462**, **8463**) for discovery on mirror sites like PMT and Revision Science.
+*   **Gold Seeded URLS**: Pre-seeded with direct CDN links for 2024 papers to ensure 100% reliable fetching of the most recent exams.
+*   **Automated During Exams**: Triggered automatically when generating a mock exam to ensure you are practicing with the freshest materials.
+*   **Trusted Source Filtering**: Strictly restricted to AQA mirrors and trusted educational CDNs (sanity.io, mmerevise, etc.).
 
 ### 📖 AI-Powered Textbook Ingestion (RAG)
+*   **Automatic 30-Page Deep Scan**: On first run, an AI extraction agent scans the first 30 pages of any provided textbook to identify the target chapter structure.
+*   **Count-Aware Discovery**: Specifically targets the exact AQA Triple Science chapter counts for 100% coverage (Biology: 18, Chemistry: 15, Physics: 16).
+*   **Metadata Smart Tagging**: Automatically tags content as `textbook` or `paper` during ingestion, enabling precise search filters in Tutor Mode.
 *   **Automatic OCR**: Uses `rapidocr-onnxruntime` to process scanned and image-based PDFs, ensuring the AI can read real AQA textbooks.
-*   **Vector Search & Metadata**: Tracks ingested files via a local metadata store, ensuring fast, relevant context retrieval without duplication.
 
 ### 📝 Dynamic & Accurate Exam Generation
 *   **Context-Aware**: Uses both textbook and ingested past-paper/mark-scheme context.
@@ -58,6 +59,7 @@ The project is fully automated for a seamless developer experience:
 *   **Detailed Results**: Every question is marked individually with a score, feedback, the actual **Mark Scheme**, and a **Model Answer**.
 
 ### 📖 Tutoring & Revision Mode
+*   **Metadata-Isolated Retrieval**: Uses a strict database filter to ensure revision knowledge comes from textbooks while citations come exclusively from actual papers.
 *   **Simple Explanations**: Converts complex textbook jargon into easy-to-understand language with relatable analogies.
 *   **Real-World Application**: Provides daily-life examples for every scientific concept.
 *   **Dynamic Cheat Sheets**: Generates structured revision summaries with key terms, formulas, and required practicals for the selected chapters.
