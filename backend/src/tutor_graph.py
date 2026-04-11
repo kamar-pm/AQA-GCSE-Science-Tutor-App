@@ -28,32 +28,52 @@ def retriever_node(state: TutorState):
     """
     Fetches textbook and paper context with high depth, prioritizing actual question papers.
     """
+    import re as _re
+    import os as _os
+    
     topic = state.get("topic")
+    subject = state.get("subject", "Science")
     
     # 1. Get knowledge (textbooks)
     explanation_context = get_context_from_topics(topic, k_per_topic=12, max_total_chunks=25, doc_type="textbook")
     
     # 2. Get paper samples - FETCH LARGER SET FOR FILTERING
-    paper_query = f"{topic} exam paper"
-    # We fetch 30 chunks to ensure we find actual paper questions (vs mark schemes)
+    paper_query = f"{subject} {topic} exam question"
     paper_context_raw = get_context_from_topics(paper_query, k_per_topic=30, max_total_chunks=40, doc_type="paper")
     
-    # 3. Post-process the paper context to prioritize "Question_paper" sources
-    # We'll split the chunks and re-order them so Question Papers come first
+    # 3. Post-process: prioritize Question Papers, extract year from filename for context
     chunks = paper_context_raw.split("\n---\n")
     q_papers = []
     mark_schemes = []
     
     for c in chunks:
-        if "Question_paper" in c or "Question_Mark" in c or "Question_paper" in c.lower():
+        # Extract year from SOURCE line
+        year_match = _re.search(r'(?:June|Jun[e]?_?)(\d{4})', c, _re.IGNORECASE)
+        if year_match and 'SOURCE:' in c:
+            year = year_match.group(1)
+            # Inject year at the top of the chunk for LLM context
+            c = c.replace('SOURCE:', f'SOURCE [Year: {year}]:', 1)
+        
+        fname_lower = c.lower()
+        is_question_paper = (
+            "question_paper" in fname_lower or 
+            "questionpaper" in fname_lower or
+            "question paper" in fname_lower
+        )
+        if is_question_paper:
             q_papers.append(c)
         else:
             mark_schemes.append(c)
             
-    # Combine prioritized: Clearer labeling for the LLM
-    prioritized_paper_context = "\n---\n".join(q_papers[:15] + mark_schemes[:5])
+    # Combine: question papers first, then mark schemes for context
+    prioritized = q_papers[:15] + mark_schemes[:5]
+    prioritized_paper_context = "\n---\n".join(prioritized)
     
-    combined_context = f"TEXTBOOK KNOWLEDGE:\n{explanation_context}\n\nACTUAL PAST PAPER EXCERPTS (PRIORITIZING QUESTION PAPERS):\n{prioritized_paper_context}"
+    combined_context = (
+        f"TEXTBOOK KNOWLEDGE:\n{explanation_context}\n\n"
+        f"ACTUAL PAST PAPER EXCERPTS (Question papers prioritized, then mark schemes):\n"
+        f"{prioritized_paper_context}"
+    )
     return {"context": combined_context}
 
 def responder_node(state: TutorState, config: RunnableConfig):
@@ -85,70 +105,106 @@ def responder_node(state: TutorState, config: RunnableConfig):
        - Use ONLY single quotes (') for ALL SVG attributes (e.g., <rect x='10' fill='blue' />).
     3. VERBATIM QUESTION RECONSTRUCTION: Reconstruct the COMPLETE question stem and prompt verbatim from the context. Fix OCR but maintain accuracy.
     
+    CRITICAL PAST PAPER RULES:
+    - ONLY include past_papers entries for papers that appear in the context below.
+    - Extract the year ONLY from the '[Year: XXXX]' annotation in the SOURCE line.
+    - DO NOT fabricate or guess years. If you cannot find a year in the annotation, use "Unknown".
+    - If no 2024 paper is present in the context, do NOT claim 2024 — use whatever years are available.
+    - Reconstruct the VERBATIM question text (fixing OCR artifacts only, not altering content).
+    - Prefer chunks from files containing 'Question_paper' in the name over mark schemes.
+
     Format response as JSON. Return ONLY the JSON object.
     {{
-       "explanation": "<svg>...</svg> \n\n Hey there! [Warm intro] \n\n ### {topic} Overview \n ... \n ### Key Concepts \n - **Term**: Definition ...",
+       "explanation": "<svg>...</svg> \n\nHey there! [Warm intro] \n\n### {topic} Overview\n\n[Explanation...]\n\n### Key Concepts\n\n- **Term**: Definition",
        "examples": "...",
        "cheat_sheet": "...",
        "past_papers": [
          {{
-            "title": "AQA GCSE [Subject] [Paper] [Year]",
+            "title": "AQA GCSE {subject} [Paper name] [Year]",
             "year": "YYYY",
             "tier": "Higher/Foundation",
-            "summary": "...",
-            "question_text": "THE RECONSTRUCTED VERBATIM QUESTION"
+            "summary": "Brief description of what this question tests",
+            "question_text": "THE VERBATIM QUESTION TEXT FROM THE PAPER"
          }}
        ]
     }}
+
+    CONTEXT (use ONLY what is provided below — do not invent papers):
+    {context[:6000]}
     """
     
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
     response = llm.invoke(messages)
     
+    import re as _re
+
     try:
         content = response.content
         
-        # 1. Strip Markdown code blocks if present
+        # 1. Strip markdown code fences
         if "```json" in content:
             content = content.split("```json")[-1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[-1].split("```")[0].strip()
 
-        # 2. Extract JSON strictly if possible
-        start = content.find('{')
-        end = content.rfind('}') + 1
-        if start != -1 and end != 0:
-            content = content[start:end]
+        # 2. Temporarily remove SVG blocks (they contain unescaped quotes that break JSON)
+        svg_blocks = []
+        def _stash_svg(m):
+            svg_blocks.append(m.group(0))
+            return f"__SVG_{len(svg_blocks)-1}__"
         
-        # Non-strict parsing to handle literal newlines etc.
-        parsed_json = json.loads(content, strict=False)
-        return {
-            "messages": [response],
-            "final_json": parsed_json
-        }
+        content_no_svg = _re.sub(r"<svg[\s\S]*?</svg>", _stash_svg, content)
+
+        # 3. Extract the JSON object
+        start = content_no_svg.find('{')
+        end = content_no_svg.rfind('}') + 1
+        if start != -1 and end > start:
+            content_no_svg = content_no_svg[start:end]
+
+        # 4. Parse JSON (non-strict to handle literal newlines)
+        parsed = json.loads(content_no_svg, strict=False)
+
+        # 5. Re-inject SVG blocks into explanation
+        if "explanation" in parsed:
+            for idx, svg in enumerate(svg_blocks):
+                parsed["explanation"] = parsed["explanation"].replace(f"__SVG_{idx}__", svg)
+
+        return {"messages": [response], "final_json": parsed}
+
     except Exception as e:
         print(f"JSON Parse Error: {e}")
-        raw_msg = response.content
-        
-        # Robust Regex Fallback: Matches "explanation": "..." while respecting escaped quotes
-        # Pattern: "explanation":\s*"( (\\.|[^"\\])* )"
-        import re
-        explanation_match = re.search(r'"explanation":\s*"((\\.|[^"\\])*)"', raw_msg, re.DOTALL)
-        
-        if explanation_match:
-            extracted_explanation = explanation_match.group(1)
-            # Unescape: Convert \" to " and \\n to \n
-            extracted_explanation = extracted_explanation.replace('\\"', '"').replace('\\n', '\n').replace('\\\\', '\\')
-        else:
-            extracted_explanation = raw_msg # Worst case fallback
+        raw = response.content
+
+        # Fallback — extract each field individually via regex
+        def _extract_str(key, text):
+            m = _re.search(rf'"{key}":\s*"((?:\\.|[^"\\])*)"', text, _re.DOTALL)
+            if not m:
+                return None
+            val = m.group(1).replace('\\"', '"').replace('\\n', '\n').replace('\\\\', '\\')
+            return val
+
+        def _extract_array(key, text):
+            """Attempt to pull a JSON array value by key from a malformed JSON string."""
+            m = _re.search(rf'"{key}":\s*(\[[\s\S]*?\])', text, _re.DOTALL)
+            if not m:
+                return []
+            try:
+                return json.loads(m.group(1), strict=False)
+            except Exception:
+                return []
+
+        explanation = _extract_str("explanation", raw) or raw
+        examples = _extract_str("examples", raw) or "Please ask me specifically for examples if you need more!"
+        cheat_sheet = _extract_str("cheat_sheet", raw) or "Revision summary is currently being refreshed."
+        past_papers = _extract_array("past_papers", raw)
 
         return {
             "messages": [response],
             "final_json": {
-                "explanation": extracted_explanation,
-                "examples": "Please ask me specifically for examples if you need more!",
-                "cheat_sheet": "Revision summary is currently being refreshed.",
-                "past_papers": []
+                "explanation": explanation,
+                "examples": examples,
+                "cheat_sheet": cheat_sheet,
+                "past_papers": past_papers
             }
         }
 

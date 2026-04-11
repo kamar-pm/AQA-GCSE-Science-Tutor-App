@@ -20,6 +20,7 @@ from ingestion import ingest_directory, update_existing_metadata
 from ddgs.exceptions import RatelimitException
 from chapter_extractor import run_extraction_cycle
 from tutor_graph import tutor_help_graph
+from search_agent import PaperSearchAgent
 from langchain_core.messages import HumanMessage
 
 
@@ -294,16 +295,31 @@ def generate_exam():
         sync_error = str(e)
         print(f"Paper sync warning for {subject}: {sync_error}")
 
-    # 2) Retrieve context from vector store (prioritize past paper signal + topic signal)
-    paper_context = get_context_from_topics(
-        f"{subject}, {topic}, AQA past paper, mark scheme, question paper",
-        k_per_topic=8,
-        max_total_chunks=24
+    # 2) Retrieve context from vector store - question papers FIRST, then mark schemes
+    import re as _re
+    def _annotate_year(raw_context):
+        """Inject [Year: XXXX] into SOURCE lines so the LLM can cite accurately."""
+        chunks = raw_context.split("\n---\n")
+        annotated = []
+        for c in chunks:
+            year_match = _re.search(r'(?:June|Jun[e]?_?)(\d{4})', c, _re.IGNORECASE)
+            if year_match and 'SOURCE:' in c:
+                c = c.replace('SOURCE:', f'SOURCE [Year: {year_match.group(1)}]:', 1)
+            annotated.append(c)
+        return "\n---\n".join(annotated)
+
+    # Fetch question papers and mark schemes separately for better control
+    q_paper_context = get_context_from_topics(
+        f"{subject} {topic} question paper exam",
+        k_per_topic=10, max_total_chunks=20, doc_type="paper"
     )
-    textbook_context = get_context_from_topics(topic, k_per_topic=5, max_total_chunks=14)
+    textbook_context = get_context_from_topics(topic, k_per_topic=5, max_total_chunks=14, doc_type="textbook")
+    
+    q_paper_context = _annotate_year(q_paper_context)
+    
     context_sections = []
-    if paper_context:
-        context_sections.append(f"PAST PAPER / MARK SCHEME CONTEXT:\n{paper_context}")
+    if q_paper_context:
+        context_sections.append(f"PAST PAPER / MARK SCHEME CONTEXT (prioritised by question paper):\n{q_paper_context}")
     if textbook_context:
         context_sections.append(f"TEXTBOOK CONTEXT:\n{textbook_context}")
     context = "\n\n".join(context_sections)
